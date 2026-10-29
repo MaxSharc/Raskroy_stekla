@@ -1,0 +1,802 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Оптимальный раскрой стекла</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f1f5f8;
+    color: #17212b;
+}
+
+header {
+    background: #142b3b;
+    color: white;
+    padding: 22px;
+    text-align: center;
+}
+
+main {
+    max-width: 1150px;
+    margin: 20px auto;
+    padding: 0 14px;
+}
+
+.panel {
+    background: white;
+    border: 1px solid #dbe3e8;
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 16px;
+}
+
+h2 {
+    margin-top: 0;
+    font-size: 20px;
+}
+
+.settings {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #bdcbd4;
+    border-radius: 7px;
+    font-size: 15px;
+}
+
+button {
+    padding: 10px 14px;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    font-weight: bold;
+    background: #e5eef3;
+    color: #173b4e;
+    margin: 4px 3px 4px 0;
+}
+
+button.primary {
+    background: #126c91;
+    color: white;
+}
+
+button.delete {
+    background: #ffeded;
+    color: #a22;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 8px;
+    border-bottom: 1px solid #e3e9ed;
+    text-align: left;
+}
+
+th {
+    font-size: 12px;
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.stat {
+    background: #f1f6f8;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.stat span {
+    display: block;
+    font-size: 12px;
+    color: #586975;
+}
+
+.stat strong {
+    display: block;
+    margin-top: 6px;
+    font-size: 21px;
+}
+
+.diagram {
+    width: 100%;
+    height: auto;
+    border: 1px solid #dbe3e8;
+    margin-top: 10px;
+}
+
+.sheet {
+    margin-top: 18px;
+    border: 1px solid #dbe3e8;
+    border-radius: 8px;
+    padding: 12px;
+    break-inside: avoid;
+}
+
+.error {
+    color: #a22;
+    margin-top: 10px;
+}
+
+.note {
+    color: #586975;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+@media(max-width: 700px) {
+    .settings, .stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media print {
+    body {
+        background: white;
+    }
+
+    header {
+        background: white;
+        color: black;
+        border-bottom: 1px solid black;
+    }
+
+    .no-print, #settings, #inputs {
+        display: none !important;
+    }
+
+    main {
+        margin: 0;
+        padding: 0;
+    }
+
+    .panel {
+        border: none;
+        padding: 5px;
+    }
+
+    .sheet {
+        break-inside: avoid;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>Оптимальный раскрой стекла</h1>
+    <p>Размеры листа по умолчанию: 2600 × 1800 мм</p>
+</header>
+
+<main>
+
+<section class="panel" id="settings">
+    <h2>Параметры листа</h2>
+
+    <div class="settings">
+        <div>
+            <label for="sheetW">Ширина листа, мм</label>
+            <input id="sheetW" type="number" min="1" value="2600">
+        </div>
+
+        <div>
+            <label for="sheetH">Высота листа, мм</label>
+            <input id="sheetH" type="number" min="1" value="1800">
+        </div>
+
+        <div>
+            <label for="kerf">Ширина реза, мм</label>
+            <input id="kerf" type="number" min="0" step="0.1" value="3">
+        </div>
+
+        <div>
+            <label for="margin">Запас от края, мм</label>
+            <input id="margin" type="number" min="0" step="0.1" value="0">
+        </div>
+    </div>
+
+    <p>
+        <label>
+            <input id="rotate" type="checkbox" checked
+                   style="width:auto">
+            Разрешить поворот деталей на 90°
+        </label>
+    </p>
+</section>
+
+<section class="panel" id="inputs">
+    <h2>Детали для раскроя</h2>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>№</th>
+                    <th>Ширина</th>
+                    <th>Высота</th>
+                    <th>Количество</th>
+                    <th>Название</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="parts"></tbody>
+        </table>
+    </div>
+
+    <div class="no-print">
+        <button id="add">+ Добавить деталь</button>
+        <button class="primary" id="calculate">Рассчитать раскрой</button>
+        <button id="example">Загрузить пример</button>
+        <button id="print">Сохранить в PDF / печать</button>
+        <button id="clear">Очистить</button>
+    </div>
+
+    <div id="error" class="error"></div>
+</section>
+
+<section class="panel">
+    <h2>Результаты расчёта</h2>
+    <div id="summary">Добавь детали и нажми «Рассчитать раскрой».</div>
+    <div id="results"></div>
+</section>
+
+</main>
+
+<script>
+"use strict";
+
+const $ = id => document.getElementById(id);
+
+const colors = [
+    "#b9dce9", "#f5d5a5", "#c6e5c2",
+    "#d7c8ef", "#f1c5cb", "#c7d8f5",
+    "#f0e5a4", "#bfe6dc", "#e7cbb8"
+];
+
+let rowNumber = 0;
+
+function addRow(w = "", h = "", qty = 1, name = "") {
+    const tr = document.createElement("tr");
+
+    const number = document.createElement("td");
+    number.className = "number";
+    tr.appendChild(number);
+
+    function makeInput(value, cls, type = "number") {
+        const td = document.createElement("td");
+        const input = document.createElement("input");
+
+        input.type = type;
+        input.className = cls;
+        input.value = value;
+
+        if (type === "number") {
+            input.min = cls === "qty" ? "1" : "0.1";
+            input.step = cls === "qty" ? "1" : "0.1";
+        }
+
+        td.appendChild(input);
+        tr.appendChild(td);
+    }
+
+    makeInput(w, "width");
+    makeInput(h, "height");
+    makeInput(qty, "qty");
+    makeInput(name, "name", "text");
+
+    const td = document.createElement("td");
+    const del = document.createElement("button");
+
+    del.textContent = "Удалить";
+    del.className = "delete";
+    del.type = "button";
+
+    del.onclick = () => {
+        tr.remove();
+        renumber();
+    };
+
+    td.appendChild(del);
+    tr.appendChild(td);
+
+    $("parts").appendChild(tr);
+
+    rowNumber++;
+    renumber();
+}
+
+function renumber() {
+    [...$("parts").rows].forEach((row, i) => {
+        row.querySelector(".number").textContent = i + 1;
+    });
+}
+
+function readParts() {
+    const parts = [];
+    let rowIndex = 0;
+
+    for (const row of $("parts").rows) {
+        rowIndex++;
+
+        const w = Number(row.querySelector(".width").value);
+        const h = Number(row.querySelector(".height").value);
+        const qty = Number(row.querySelector(".qty").value);
+
+        const name =
+            row.querySelector(".name").value.trim() ||
+            `Деталь ${rowIndex}`;
+
+        if (
+            !Number.isFinite(w) || w <= 0 ||
+            !Number.isFinite(h) || h <= 0 ||
+            !Number.isInteger(qty) || qty <= 0
+        ) {
+            throw new Error(
+                `Проверь ширину, высоту и количество в строке ${rowIndex}.`
+            );
+        }
+
+        if (qty > 1000 || parts.length + qty > 2000) {
+            throw new Error("Слишком много деталей в одном расчёте.");
+        }
+
+        for (let i = 0; i < qty; i++) {
+            parts.push({
+                name: name,
+                w: w,
+                h: h,
+                id: `${rowIndex}-${i + 1}`
+            });
+        }
+    }
+
+    if (!parts.length) {
+        throw new Error("Добавь хотя бы одну деталь.");
+    }
+
+    return parts;
+}
+
+/*
+  Эвристический алгоритм размещения прямоугольников.
+  Проверяет несколько порядков сортировки и выбирает
+  раскладку с минимальным количеством листов.
+*/
+function pack(parts, W, H, kerf, margin, rotate, sortType) {
+    const usableW = W - 2 * margin;
+    const usableH = H - 2 * margin;
+
+    if (usableW <= 0 || usableH <= 0) {
+        throw new Error("Запас от края слишком большой.");
+    }
+
+    const items = parts.map(p => ({
+        ...p,
+        pw: p.w + kerf,
+        ph: p.h + kerf
+    }));
+
+    for (const p of items) {
+        const fits =
+            (p.pw <= usableW && p.ph <= usableH) ||
+            (rotate && p.ph <= usableW && p.pw <= usableH);
+
+        if (!fits) {
+            throw new Error(
+                `${p.name}: деталь ${p.w} × ${p.h} мм ` +
+                "не помещается на лист с заданным запасом."
+            );
+        }
+    }
+
+    const sorters = {
+        area: (a, b) => b.pw * b.ph - a.pw * a.ph,
+        long: (a, b) =>
+            Math.max(b.pw, b.ph) - Math.max(a.pw, a.ph),
+        height: (a, b) => b.ph - a.ph || b.pw - a.pw,
+        width: (a, b) => b.pw - a.pw || b.ph - a.ph,
+        perimeter: (a, b) =>
+            b.pw + b.ph - a.pw - a.ph,
+        short: (a, b) =>
+            Math.min(b.pw, b.ph) - Math.min(a.pw, a.ph)
+    };
+
+    const ordered = [...items].sort(sorters[sortType]);
+    const sheets = [];
+
+    function place(sheet, freeIndex, item, ow, oh, rotated) {
+        const f = sheet.free.splice(freeIndex, 1)[0];
+
+        sheet.placed.push({
+            ...item,
+            x: f.x,
+            y: f.y,
+            w: ow,
+            h: oh,
+            rotated: rotated
+        });
+
+        // Разбиваем свободную область на две прямоугольные области.
+        const right = {
+            x: f.x + ow,
+            y: f.y,
+            w: f.w - ow,
+            h: f.h
+        };
+
+        const bottom = {
+            x: f.x,
+            y: f.y + oh,
+            w: ow,
+            h: f.h - oh
+        };
+
+        if (right.w > 0.01 && right.h > 0.01) {
+            sheet.free.push(right);
+        }
+
+        if (bottom.w > 0.01 && bottom.h > 0.01) {
+            sheet.free.push(bottom);
+        }
+    }
+
+    for (const item of ordered) {
+        let best = null;
+
+        for (let si = 0; si < sheets.length; si++) {
+            const sheet = sheets[si];
+
+            for (let fi = 0; fi < sheet.free.length; fi++) {
+                const f = sheet.free[fi];
+
+                const orientations = [
+                    { w: item.pw, h: item.ph, rotated: false }
+                ];
+
+                if (rotate && item.pw !== item.ph) {
+                    orientations.push({
+                        w: item.ph,
+                        h: item.pw,
+                        rotated: true
+                    });
+                }
+
+                for (const o of orientations) {
+                    if (o.w > f.w + 0.001 ||
+                        o.h > f.h + 0.001) {
+                        continue;
+                    }
+
+                    const leftoverW = f.w - o.w;
+                    const leftoverH = f.h - o.h;
+
+                    const score = [
+                        leftoverW * leftoverH,
+                        Math.min(leftoverW, leftoverH),
+                        Math.max(leftoverW, leftoverH),
+                        si,
+                        fi
+                    ];
+
+                    if (
+                        !best ||
+                        score[0] < best.score[0] - 0.001 ||
+                        (
+                            Math.abs(score[0] - best.score[0]) < 0.001 &&
+                            score[1] < best.score[1]
+                        )
+                    ) {
+                        best = {
+                            si, fi, o, score
+                        };
+                    }
+                }
+            }
+        }
+
+        if (!best) {
+            const sheet = {
+                free: [{
+                    x: margin,
+                    y: margin,
+                    w: usableW,
+                    h: usableH
+                }],
+                placed: []
+            };
+
+            sheets.push(sheet);
+
+            let ow = item.pw;
+            let oh = item.ph;
+            let rotated = false;
+
+            if (rotate && (ow > usableW || oh > usableH)) {
+                ow = item.ph;
+                oh = item.pw;
+                rotated = true;
+            }
+
+            place(sheet, 0, item, ow, oh, rotated);
+        } else {
+            const o = best.o;
+            place(
+                sheets[best.si],
+                best.fi,
+                item,
+                o.w,
+                o.h,
+                o.rotated
+            );
+        }
+    }
+
+    return sheets;
+}
+
+function optimize(parts, W, H, kerf, margin, rotate) {
+    const methods = [
+        "area", "long", "height",
+        "width", "perimeter", "short"
+    ];
+
+    let best = null;
+    let bestWaste = Infinity;
+
+    for (const method of methods) {
+        const candidate = pack(
+            parts, W, H, kerf, margin, rotate, method
+        );
+
+        const freeArea = candidate.reduce((sum, sheet) => {
+            return sum + sheet.free.reduce(
+                (s, r) => s + r.w * r.h, 0
+            );
+        }, 0);
+
+        if (
+            best === null ||
+            candidate.length < best.length ||
+            (
+                candidate.length === best.length &&
+                freeArea < bestWaste
+            )
+        ) {
+            best = candidate;
+            bestWaste = freeArea;
+        }
+    }
+
+    return best;
+}
+
+function drawSheet(sheet, W, H) {
+    const scale = 850 / Math.max(W, H);
+    const pad = 28;
+    const dw = W * scale;
+    const dh = H * scale;
+
+    let content = "";
+
+    sheet.free.forEach((r) => {
+        content += `
+        <g>
+          <rect x="${r.x * scale}" y="${r.y * scale}"
+                width="${r.w * scale}" height="${r.h * scale}"
+                fill="#f5f7f8" stroke="#94a3ad"
+                stroke-dasharray="5 3"/>
+          <text x="${(r.x + r.w / 2) * scale}"
+                y="${(r.y + r.h / 2) * scale}"
+                font-size="11" text-anchor="middle"
+                fill="#52616b">
+            ${Math.round(r.w)} × ${Math.round(r.h)}
+          </text>
+        </g>`;
+    });
+
+    sheet.placed.forEach((p, i) => {
+        const x = p.x * scale;
+        const y = p.y * scale;
+        const w = p.w * scale;
+        const h = p.h * scale;
+
+        const rw = p.rotated ? p.h - 3 : p.w - 3;
+        const rh = p.rotated ? p.w - 3 : p.h - 3;
+
+        const fontSize = Math.max(
+            8, Math.min(15, Math.min(w, h) * 0.16)
+        );
+
+        content += `
+        <g>
+          <title>${p.name}: ${Math.round(rw)} × ${Math.round(rh)} мм</title>
+          <rect x="${x}" y="${y}" width="${w}" height="${h}"
+                fill="${colors[i % colors.length]}"
+                stroke="#314654" stroke-width="1.2"/>
+          <text x="${x + w / 2}" y="${y + h / 2}"
+                text-anchor="middle" dominant-baseline="middle"
+                font-size="${fontSize}" font-weight="bold"
+                fill="#17212b">
+            ${Math.round(rw)} × ${Math.round(rh)}
+          </text>
+        </g>`;
+    });
+
+    return `
+    <svg class="diagram"
+         viewBox="0 0 ${dw + pad * 2} ${dh + pad * 2}"
+         xmlns="http://www.w3.org/2000/svg">
+      <rect x="${pad}" y="${pad}" width="${dw}" height="${dh}"
+            fill="white" stroke="#142b3b" stroke-width="2"/>
+      <g transform="translate(${pad},${pad})">${content}</g>
+      <text x="${pad + dw / 2}" y="${dh + pad + 20}"
+            text-anchor="middle" font-size="12">${W} мм</text>
+      <text x="12" y="${pad + dh / 2}"
+            text-anchor="middle" font-size="12"
+            transform="rotate(-90 12 ${pad + dh / 2})">${H} мм</text>
+    </svg>`;
+}
+
+function calculate() {
+    $("error").textContent = "";
+
+    try {
+        const W = Number($("sheetW").value);
+        const H = Number($("sheetH").value);
+        const kerf = Number($("kerf").value);
+        const margin = Number($("margin").value);
+        const rotate = $("rotate").checked;
+
+        if (!(W > 0 && H > 0)) {
+            throw new Error("Укажи корректные размеры листа.");
+        }
+
+        if (!(kerf >= 0 && margin >= 0)) {
+            throw new Error("Рез и запас не могут быть отрицательными.");
+        }
+
+        const parts = readParts();
+
+        const sheets = optimize(
+            parts, W, H, kerf, margin, rotate
+        );
+
+        const partArea = parts.reduce(
+            (sum, p) => sum + p.w * p.h, 0
+        );
+
+        const totalArea = sheets.length * W * H;
+        const wasteArea = Math.max(0, totalArea - partArea);
+        const usage = 100 * partArea / totalArea;
+
+        $("summary").innerHTML = `
+        <div class="stats">
+          <div class="stat">
+            <span>Количество листов</span>
+            <strong>${sheets.length}</strong>
+          </div>
+          <div class="stat">
+            <span>Количество деталей</span>
+            <strong>${parts.length}</strong>
+          </div>
+          <div class="stat">
+            <span>Использование листов</span>
+            <strong>${usage.toFixed(1)}%</strong>
+          </div>
+          <div class="stat">
+            <span>Отходы по площади</span>
+            <strong>${(wasteArea / 1e6).toFixed(3)} м²</strong>
+          </div>
+        </div>
+        <p class="note">
+          Алгоритм эвристический: он ищет хороший вариант,
+          но не гарантирует абсолютный математический минимум.
+          Для реального реза обязательно проверь технологические
+          требования оборудования.
+        </p>`;
+
+        $("results").innerHTML = "";
+
+        sheets.forEach((sheet, i) => {
+            const freeArea = sheet.free.reduce(
+                (sum, r) => sum + r.w * r.h, 0
+            );
+
+            const div = document.createElement("div");
+            div.className = "sheet";
+
+            const heading = document.createElement("h3");
+            heading.textContent =
+                `Лист ${i + 1}: ${W} × ${H} мм`;
+
+            const info = document.createElement("p");
+            info.textContent =
+                `Деталей: ${sheet.placed.length}; ` +
+                `свободная площадь по схеме: ` +
+                `${(freeArea / 1e6).toFixed(3)} м²`;
+
+            div.appendChild(heading);
+            div.appendChild(info);
+
+            div.insertAdjacentHTML(
+                "beforeend", drawSheet(sheet, W, H)
+            );
+
+            $("results").appendChild(div);
+        });
+
+    } catch (error) {
+        $("error").textContent = error.message;
+    }
+}
+
+$("add").addEventListener("click", () => addRow());
+
+$("calculate").addEventListener("click", calculate);
+
+$("example").addEventListener("click", () => {
+    $("parts").innerHTML = "";
+    addRow(2055, 745, 4, "Стекло A");
+    addRow(2055, 510, 4, "Стекло B");
+    addRow(1655, 375, 4, "Стекло C");
+    calculate();
+});
+
+$("clear").addEventListener("click", () => {
+    $("parts").innerHTML = "";
+    $("results").innerHTML = "";
+    $("summary").textContent = "Добавь детали и рассчитай раскрой.";
+    $("error").textContent = "";
+    addRow();
+});
+
+$("print").addEventListener("click", () => {
+    if (!$("results").children.length) {
+        calculate();
+    }
+
+    if ($("results").children.length) {
+        window.print();
+    }
+});
+
+// Пример заказа при первом открытии
+addRow(2055, 745, 4, "Стекло A");
+addRow(2055, 510, 4, "Стекло B");
+addRow(1655, 375, 4, "Стекло C");
+</script>
+
+</body>
+</html>
